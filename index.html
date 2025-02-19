@@ -5,27 +5,25 @@
   <title>Exam Stress: Separated Sessions Line Chart</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
-    body { font-family: sans-serif; }
-    .tooltip {
-      position: absolute;
-      background-color: #fff;
-      padding: 6px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      pointer-events: none;
-      font-size: 12px;
-      max-width: 300px;
-      word-wrap: break-word;
-    }
-    .axis-label {
-      font-size: 12px;
-      font-weight: bold;
-    }
-    .line-path {
-      fill: none;
-      stroke-width: 1.5px;
-      stroke-opacity: 0.8;
-    }
+    body {
+  font-family: sans-serif;
+  text-align: center; /* Centers the entire page content */
+}
+
+#chart-container {
+  display: flex;
+  justify-content: center; /* Horizontally centers the chart */
+  align-items: center;
+  margin: auto;
+  width: 100%;
+  height: 80vh;
+}
+
+svg {
+  display: block;
+  margin: auto;
+}
+
   </style>
 </head>
 <body>
@@ -52,10 +50,19 @@
     </select>
   </div>
   <br>
-  <div id="chart"></div>
+  <div id="chart-container">
+    <div id="chart"></div> <!-- The SVG will be appended inside this div -->
+  </div>
+  
   <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+  <div id="summary" style="margin-top: 10px; font-size: 14px; font-weight: bold;"></div>
+  <button id="resetBrush">Reset Selection (Click Twice)  </button>
+
+
 
   <script>
+    let aggregatedBySession = []; // Make this a global variable
+
     //Get trimmed extent (5th–95th percentile by default)
     function getTrimmedExtent(data, accessor, trim = 0.05) {
       const values = data.map(accessor).sort(d3.ascending);
@@ -95,24 +102,131 @@
       return aggregated;
     }
 
-    const margin = { top: 50, right: 50, bottom: 50, left: 60 },
-          width  = 800 - margin.left - margin.right,
-          height = 500 - margin.top - margin.bottom;
+    function brushed(event) {
+    if (!event.selection || aggregatedBySession.length === 0) return; // Exit if no selection or no data
 
-    const svg = d3.select("#chart")
-      .append("svg")
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.top + margin.bottom)
-      .append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+    const [x0, x1] = event.selection.map(xScale.invert); // Convert pixel values to data values
 
+    // Filter data based on selection range
+    const filteredData = aggregatedBySession.map(session => ({
+        session: session.session,
+        aggregated: session.aggregated.filter(d => d.x >= x0 && d.x <= x1)
+    })).filter(d => d.aggregated.length > 0);
+
+    // Update the chart with filtered data
+    updateChartWithFilteredData(filteredData);
+    displaySummary(filteredData, x0, x1);
+}
+
+
+function updateChartWithFilteredData(filteredData) {
+    // Update the session lines
+    const sessionLines = svg.selectAll(".session-line")
+        .data(filteredData, d => d.session);
+
+    sessionLines.enter()
+        .append("path")
+        .attr("class", "session-line")
+        .merge(sessionLines)
+        .transition().duration(500)
+        .attr("d", d => lineGenerator(d.aggregated))
+        .attr("stroke", d => colorScale(d.session))
+        .attr("fill", "none")
+        .attr("stroke-width", 1.5);
+
+    sessionLines.exit().remove();
+}
+
+function displaySummary(filteredData, x0, x1) {
+    if (filteredData.length === 0) {
+        d3.select("#summary").html("No data in the selected range.");
+        return;
+    }
+
+    // Calculate summary statistics
+    let totalPoints = 0;
+    let yValues = [];
+
+    filteredData.forEach(session => {
+        totalPoints += session.aggregated.length;
+        yValues.push(...session.aggregated.map(d => d.y));
+    });
+
+    const minY = d3.min(yValues);
+    const maxY = d3.max(yValues);
+    const avgY = d3.mean(yValues);
+
+    // Format output
+    const summaryText = `
+        <strong>Selected Range:</strong> ${x0.toFixed(2)} to ${x1.toFixed(2)}<br>
+        <strong>Sessions Included:</strong> ${filteredData.map(d => d.session).join(", ")}<br>
+        <strong>Data Points:</strong> ${totalPoints}<br>
+        <strong>Y-Value Range:</strong> ${minY.toFixed(2)} to ${maxY.toFixed(2)}<br>
+        <strong>Average Y-Value:</strong> ${avgY.toFixed(2)}
+    `;
+
+    // Update summary div
+    d3.select("#summary").html(summaryText);
+}
+
+
+
+    const margin = { top: 60, right: 200, bottom: 60, left: 80 }, // Increased margins for better fit
+      width  = 1000 - margin.left - margin.right, // Increase width
+      height = 600 - margin.top - margin.bottom; // Increase height
+
+  
+  const chartContainer = d3.select("#chart"); // Selects the new chart div
+
+const svg = chartContainer
+  .append("svg")
+  .attr("width", width + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+  .style("display", "block") // Ensures the SVG behaves well in a flex container
+  .append("g")
+  .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+  //BRUSH
+// Define the brush behavior
+const brush = d3.brushX()
+    .extent([[0, 0], [width, height]]) // Brushing area
+    .on("brush end", brushed);
+
+// Append the brush to the SVG
+const brushGroup = svg.append("g")
+    .attr("class", "brush")
+    .call(brush);
+
+//END BRUSH
+
+    //begin{zoom}
+  // Define zoom behavior
+const zoom = d3.zoom()
+    .scaleExtent([0.5, 5]) // Min and max zoom levels
+    .translateExtent([[0, 0], [width, height]]) // Restrict panning area
+    .on("zoom", zoomed);
+
+// Apply zoom to the entire SVG container
+d3.select("svg").call(zoom).call(zoom.transform, d3.zoomIdentity);
+
+// Function to handle zooming and panning
+function zoomed(event) {
+    svg.attr("transform", event.transform); // Apply zoom transformation to the whole SVG group
+}
+
+// Reset zoom function
+d3.select("#resetZoom").on("click", function() {
+    d3.select("svg").transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+});
+
+    //end{zoom}
     const tooltip = d3.select("#tooltip");
 
     // Scales and axes
     let xScale = d3.scaleLinear().range([0, width]);
     let yScale = d3.scaleLinear().range([height, 0]);
     const xAxisGroup = svg.append("g").attr("transform", `translate(0, ${height})`);
-    const yAxisGroup = svg.append("g");
+    const yAxisGroup = svg.append("g").attr("transform", `translate(0, 0)`);
 
     // Line generator for aggregated data (per session)
     const lineGenerator = d3.line()
@@ -152,7 +266,7 @@
       // Group data by Session.
       const sessionGroups = d3.group(rawData, d => d.Session);
       const binsCount = 100;
-      const aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
+      aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
         return {
           session: sessionName,
           aggregated: aggregateData(groupData, xAttribute, yAttribute, binsCount, xExtent[0], xExtent[1])
@@ -241,7 +355,7 @@
         const legendEnter = legend.enter()
             .append("g")
             .attr("class", "legend")
-            .attr("transform", (d, i) => `translate(${width + 20}, ${i * 20})`);
+            .attr("transform", (d, i) => `translate(${width -150}, ${i * 20})`);
 
         legendEnter.append("rect")
             .attr("width", 12)
@@ -264,6 +378,13 @@
     // Update when dropdowns change.
     d3.select("#xSelect").on("change", updateChart);
     d3.select("#ySelect").on("change", updateChart);
+    // Reset brush selection when the button is clicked
+d3.select("#resetBrush").on("click", function() {
+    brushGroup.call(brush.move, null); // Clears the brush selection
+    updateChart(); // Restore full dataset
+    d3.select("#summary").html(""); // Clear the summary
+});
+
   </script>
 </body>
 </html>
