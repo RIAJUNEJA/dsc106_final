@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Exam Stress: Separated Sessions Line Chart</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: sans-serif; }
+    .tooltip {
+      position: absolute;
+      background-color: #fff;
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 12px;
+      max-width: 300px;
+      word-wrap: break-word;
+    }
+    .axis-label {
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .line-path {
+      fill: none;
+      stroke-width: 1.5px;
+      stroke-opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>How do biometric signals (heart rate, EDA, temperature) fluctuate during exam stress</h1>
+  <p>
+    This chart shows how biometric signals (e.g., Heart Rate, EDA, Temperature) fluctuate during exam stress by separating out each exam Session.
+    The x‑ and y‑axes are selectable, and data are aggregated (binned) per session using a trimmed (5th–95th percentile) domain to reduce outliers.
+  </p>
+  <div>
+    <label for="xSelect">X-Axis: </label>
+    <select id="xSelect">
+      <option value="time_index">Time (Index)</option>
+      <option value="heart_rate">Heart Rate (BPM)</option>
+      <option value="eda">Electrodermal Activity (µS)</option>
+      <option value="skin_temp">Temperature (°C)</option>
+    </select>
+    &nbsp;&nbsp;
+    <label for="ySelect">Y-Axis: </label>
+    <select id="ySelect">
+      <option value="heart_rate">Heart Rate (BPM)</option>
+      <option value="eda">Electrodermal Activity (µS)</option>
+      <option value="skin_temp">Temperature (°C)</option>
+      <option value="time_index">Time (Index)</option>
+    </select>
+  </div>
+  <br>
+  <div id="chart"></div>
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    //Get trimmed extent (5th–95th percentile by default)
+    function getTrimmedExtent(data, accessor, trim = 0.05) {
+      const values = data.map(accessor).sort(d3.ascending);
+      const lower = d3.quantile(values, trim);
+      const upper = d3.quantile(values, 1 - trim);
+      return [lower, upper];
+    }
+
+    // Aggregate data into bins along x, computing average y and collecting Students.
+    function aggregateData(data, xKey, yKey, bins, xMin, xMax) {
+      const binWidth = (xMax - xMin) / bins;
+      const binArray = [];
+      for (let i = 0; i < bins; i++) {
+        binArray.push({
+          xStart: xMin + i * binWidth,
+          dataPoints: []
+        });
+      }
+      data.forEach(d => {
+        const xVal = d[xKey];
+        if (xVal >= xMin && xVal <= xMax) {
+          const binIndex = Math.floor((xVal - xMin) / binWidth);
+          if (binIndex >= 0 && binIndex < bins) {
+            binArray[binIndex].dataPoints.push(d);
+          }
+        }
+      });
+      const aggregated = binArray.map(b => {
+        if (b.dataPoints.length === 0) return null;
+        return {
+          x: b.xStart + binWidth / 2, // bin midpoint
+          y: d3.mean(b.dataPoints, d => d[yKey]),
+          // Collect unique students from this bin:
+          students: Array.from(new Set(b.dataPoints.map(d => d.Student)))
+        };
+      }).filter(d => d !== null && !isNaN(d.y));
+      return aggregated;
+    }
+
+    const margin = { top: 50, right: 50, bottom: 50, left: 60 },
+          width  = 800 - margin.left - margin.right,
+          height = 500 - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+    const tooltip = d3.select("#tooltip");
+
+    // Scales and axes
+    let xScale = d3.scaleLinear().range([0, width]);
+    let yScale = d3.scaleLinear().range([height, 0]);
+    const xAxisGroup = svg.append("g").attr("transform", `translate(0, ${height})`);
+    const yAxisGroup = svg.append("g");
+
+    // Line generator for aggregated data (per session)
+    const lineGenerator = d3.line()
+      .curve(d3.curveMonotoneX)
+      .x(d => xScale(d.x))
+      .y(d => yScale(d.y));
+
+    // Color scale for sessions
+    const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+    let rawData;
+    d3.csv("consolidated_stress_data.csv").then(data => {
+      // Parse numeric columns; keep Session and Student as strings.
+      data.forEach(d => {
+        d.time_index = +d["Time (Index)"];
+        d.eda        = +d["EDA"];
+        d.heart_rate = +d["Heart Rate"];
+        d.skin_temp  = +d["Temperature"];
+      });
+      rawData = data;
+      updateChart();
+    }).catch(err => console.error("Error loading CSV:", err));
+
+    function updateChart() {
+      const xAttribute = d3.select("#xSelect").property("value");
+      const yAttribute = d3.select("#ySelect").property("value");
+
+      // Sort rawData by the selected x-attribute.
+      rawData.sort((a, b) => a[xAttribute] - b[xAttribute]);
+
+      // Overall trimmed domain across all sessions.
+      const xExtent = getTrimmedExtent(rawData, d => d[xAttribute], 0.05);
+      const yExtent = getTrimmedExtent(rawData, d => d[yAttribute], 0.05);
+      xScale.domain(xExtent).nice();
+      yScale.domain(yExtent).nice();
+
+      // Group data by Session.
+      const sessionGroups = d3.group(rawData, d => d.Session);
+      const binsCount = 100;
+      const aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
+        return {
+          session: sessionName,
+          aggregated: aggregateData(groupData, xAttribute, yAttribute, binsCount, xExtent[0], xExtent[1])
+        };
+      }).filter(d => d.aggregated.length > 0);
+      xAxisGroup.transition().duration(500).call(d3.axisBottom(xScale));
+      yAxisGroup.transition().duration(500).call(d3.axisLeft(yScale));
+
+      const sessionLines = svg.selectAll(".session-line")
+                              .data(aggregatedBySession, d => d.session);
+      sessionLines.enter()
+        .append("path")
+          .attr("class", "session-line")
+        .merge(sessionLines)
+        .transition().duration(500)
+          .attr("d", d => lineGenerator(d.aggregated))
+          .attr("stroke", d => colorScale(d.session))
+          .attr("fill", "none")
+          .attr("stroke-width", 1.5);
+      sessionLines.exit().remove();
+
+      // For circles, create a group per session.
+      const sessionGroupsSel = svg.selectAll(".session-group")
+                                  .data(aggregatedBySession, d => d.session);
+      const sessionGroupsEnter = sessionGroupsSel.enter()
+                                  .append("g")
+                                  .attr("class", "session-group");
+      sessionGroupsEnter.merge(sessionGroupsSel)
+        .each(function(d) {
+          const group = d3.select(this);
+          // Bind aggregated points to circles.
+          const circles = group.selectAll("circle")
+                        .data(d.aggregated);
+          circles.enter()
+            .append("circle")
+              .attr("r", 3)
+              .attr("fill", colorScale(d.session))
+              .attr("fill-opacity", 0.7)
+            .merge(circles)
+            .transition().duration(500)
+              .attr("cx", dPoint => xScale(dPoint.x))
+              .attr("cy", dPoint => yScale(dPoint.y));
+          circles.exit().remove();
+        });
+      sessionGroupsSel.exit().remove();
+
+      // Attach tooltips to all circles.
+      svg.selectAll("circle")
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", 0.9);
+          // Retrieve the session from the parent group.
+          const session = d3.select(event.target.parentNode).datum().session;
+          const studentList = d.students.join(", ");
+          tooltip.html(`
+            <strong>Session:</strong> ${session}<br/>
+            <strong>${xAttribute} bin center:</strong> ${d.x.toFixed(2)}<br/>
+            <strong>Avg. ${yAttribute}:</strong> ${d.y.toFixed(2)}<br/>
+            <strong>Students:</strong> ${studentList || "N/A"}
+          `)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.transition().duration(300).style("opacity", 0);
+        });
+
+      // Update axis labels.
+      svg.selectAll(".axis-label").remove();
+      svg.append("text")
+         .attr("class", "axis-label")
+         .attr("x", width)
+         .attr("y", height + margin.bottom - 10)
+         .attr("text-anchor", "end")
+         .text(xAttribute.replace("_", " ").toUpperCase());
+      svg.append("text")
+         .attr("class", "axis-label")
+         .attr("transform", "rotate(-90)")
+         .attr("y", -margin.left + 15)
+         .attr("x", -margin.top)
+         .attr("text-anchor", "end")
+         .text(yAttribute.replace("_", " ").toUpperCase());
+        // Add legend for sessions (place this at the end of updateChart())
+        const legend = svg.selectAll(".legend")
+            .data(aggregatedBySession, d => d.session);
+
+        const legendEnter = legend.enter()
+            .append("g")
+            .attr("class", "legend")
+            .attr("transform", (d, i) => `translate(${width + 20}, ${i * 20})`);
+
+        legendEnter.append("rect")
+            .attr("width", 12)
+            .attr("height", 12)
+            .attr("fill", d => colorScale(d.session));
+
+        legendEnter.append("text")
+            .attr("x", 16)
+            .attr("y", 10)
+            .text(d => d.session)
+            .style("font-size", "12px");
+
+        legend.merge(legendEnter)
+            .attr("transform", (d, i) => `translate(${width + 20}, ${i * 20})`);
+
+        legend.exit().remove();
+
+    }
+
+    // Update when dropdowns change.
+    d3.select("#xSelect").on("change", updateChart);
+    d3.select("#ySelect").on("change", updateChart);
+  </script>
+</body>
+</html>
