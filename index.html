@@ -51,6 +51,60 @@
       <p>Use mouse drag to select regions. Scroll to zoom. Click "Reset" to clear selections.</p>
     </footer>
 
+    <section id="writeup">
+        <h2>Project Writeup</h2>
+        <p><strong>Title:</strong> Clustering Physiological Stress Patterns in Students</p>
+        <p><strong>Research Question:</strong> How do biometric signals (heart rate, electrodermal activity, and temperature) fluctuate during exam stress, and can we identify meaningful stress patterns dynamically?</p>
+        <p>Exams are stressful, but the physiological impact varies between students and testing environments. By analyzing biometric data collected from students during midterm and final exams, we aim to identify trends in stress levels and uncover patterns in how students physiologically respond to exam pressure.</p>
+        
+        <h3>Dataset Overview</h3>
+        <p>We used the PhysioNet: Wearable Exam Stress Dataset, which contains continuous biometric signals collected from students across multiple exam sessions. Specifically, we focused on:</p>
+        <ul>
+          <li><strong>Electrodermal Activity (EDA):</strong> Measures sweat gland activity, linked to stress and emotional arousal.</li>
+          <li><strong>Heart Rate (HR):</strong> Higher heart rates may indicate heightened anxiety or stress responses.</li>
+          <li><strong>Skin Temperature (Temp):</strong> Can fluctuate with stress and physiological changes.</li>
+        </ul>
+        <p>The dataset includes readings collected before, during, and after exams from multiple students, allowing us to analyze how stress varies across different testing environments.</p>
+        
+        <h3>Design Rationale and Interactive Visualization</h3>
+        <ul>
+          <li><strong>Why a Line Chart?</strong> We chose an interactive line chart because it effectively visualizes trends over time, allows direct comparisons between exam sessions (each plotted in a unique color), and provides a clear view of fluctuations in biometric signals without overwhelming the viewer.</li>
+          <li><strong>Handling Large Data:</strong> To manage the high density of continuous readings, we aggregated the data into bins and trimmed outliers (5th–95th percentiles) to reduce noise and enhance clarity.</li>
+          <li><strong>Session-Based Separation:</strong> We grouped data by exam session (e.g., Final, Midterm 1, Midterm 2) so that each session is displayed separately. This makes it easier to compare stress responses across different exams.</li>
+          <li><strong>Interactivity Features:</strong>
+            <ul>
+              <li><strong>Dropdown Menus:</strong> Users can select different metrics for the x- and y-axes (for example, "Time vs. Heart Rate" or "EDA vs. Temperature").</li>
+              <li><strong>Tooltips:</strong> Hovering over an aggregated data point displays detailed information including the average value for that bin, the session name, and the contributing students.</li>
+              <li><strong>Brushing for Zooming:</strong> Users can select a specific time range to focus on short-term trends, with a reset button to restore the full view.</li>
+            </ul>
+          </li>
+        </ul>
+        
+        <h3>Development Process</h3>
+        <ul>
+          <li><strong>Team Formation and Roles:</strong> Our team consisted of 4 members—Ria (data processing and cleaning,D3.js implementation and interactivity), Aahil (D3.js implementation and interactivity), Brandon (UI/UX design and debugging), and Abdulrahim Ham (documentation and write-up).</li>
+          <li><strong>Time Investment:</strong> We spent a total of 20 hours on this project, with each member contributing approximately 5 hours across data cleaning, visualization development, debugging, and documentation.</li>
+          <li><strong>Challenges and Solutions:</strong>
+            <ul>
+              <li><strong>Cluttered Data Visualization:</strong> We implemented binning and outlier trimming to improve clarity.</li>
+              <li><strong>Distinguishing Exam Sessions:</strong> Grouping data by session and using distinct colors allowed us to easily compare stress patterns.</li>
+              <li><strong>Implementing Interactivity:</strong> We refined our dropdown, brush, and tooltip interactions through multiple iterations to ensure smooth performance and a user-friendly experience.</li>
+            </ul>
+          </li>
+        </ul>
+        
+        <h3>Future Improvements</h3>
+        <ul>
+          <li>Implement more advanced filtering options (e.g., selecting a specific student or exam session) for a more granular analysis.</li>
+          <li>Enhance zoom and brush interactions to allow seamless switching between aggregated and raw data views.</li>
+          <li>Refine tooltip design to include additional context such as precise time windows or predefined stress level categories.</li>
+          <li>Incorporate predictive modeling to forecast stress levels based on current trends.</li>
+        </ul>
+        
+        <p><strong>Conclusion:</strong> This interactive visualization provides an engaging and dynamic exploration of how biometric signals fluctuate during exam stress. By aggregating and separating data by exam session, we can uncover meaningful patterns in stress responses. Future enhancements will further refine the analysis and user experience.</p>
+      </section>
+      
+
     <script src="script.js"></script>
   </body>
 </html>

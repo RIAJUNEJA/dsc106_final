@@ -1,4 +1,11 @@
-let aggregatedBySession = []; // Make this a global variable
+let aggregatedBySession = []; 
+
+const units = {
+    time_index: "seconds", 
+    heart_rate: "BPM",
+    eda: "µS",
+    skin_temp: "°C"
+  };
 
 //Get trimmed extent (5th–95th percentile by default)
 function getTrimmedExtent(data, accessor, trim = 0.05) {
@@ -294,7 +301,7 @@ function updateChart() {
     .attr("x", width)
     .attr("y", height + margin.bottom - 10)
     .attr("text-anchor", "end")
-    .text(xAttribute.replace("_", " ").toUpperCase());
+    .text(xAttribute.replace("_", " ").toUpperCase() + " (" + units[xAttribute] + ")");
   svg
     .append("text")
     .attr("class", "axis-label")
@@ -302,7 +309,7 @@ function updateChart() {
     .attr("y", -margin.left + 15)
     .attr("x", -margin.top)
     .attr("text-anchor", "end")
-    .text(yAttribute.replace("_", " ").toUpperCase());
+    .text(yAttribute.replace("_", " ").toUpperCase() + " (" + units[yAttribute] + ")");
   // Add legend for sessions (place this at the end of updateChart())
   const legend = svg.selectAll(".legend").data(aggregatedBySession, (d) => d.session);
 
