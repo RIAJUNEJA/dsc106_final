@@ -115,8 +115,8 @@ function displaySummary(filteredData, x0, x1) {
 }
 
 const margin = { top: 60, right: 200, bottom: 60, left: 80 }, // Increased margins for better fit
-  width = 1000 - margin.left - margin.right, // Increase width
-  height = 600 - margin.top - margin.bottom; // Increase height
+  width = 1200 - margin.left - margin.right, // Increase width
+  height = 700 - margin.top - margin.bottom; // Increase height
 
 const chartContainer = d3.select("#chart"); // Selects the new chart div
 
@@ -205,17 +205,27 @@ function updateChart() {
   const xAttribute = d3.select("#xSelect").property("value");
   const yAttribute = d3.select("#ySelect").property("value");
 
-  // Sort rawData by the selected x-attribute.
-  rawData.sort((a, b) => a[xAttribute] - b[xAttribute]);
+  // Get selected event
+  const selectedEvent = d3.select("#eventSelect").property("value");
 
-  // Overall trimmed domain across all sessions.
-  const xExtent = getTrimmedExtent(rawData, (d) => d[xAttribute], 0.05);
-  const yExtent = getTrimmedExtent(rawData, (d) => d[yAttribute], 0.05);
+  // Filter rawData based on selected event
+  let filteredData = rawData;
+  console.log(filteredData);
+  if (selectedEvent !== "all") {
+    filteredData = rawData.filter((d) => d.Session === selectedEvent);
+  }
+
+  // Sort filtered data by the selected x-attribute
+  filteredData.sort((a, b) => a[xAttribute] - b[xAttribute]);
+
+  // Overall trimmed domain across all sessions
+  const xExtent = getTrimmedExtent(filteredData, (d) => d[xAttribute], 0.05);
+  const yExtent = getTrimmedExtent(filteredData, (d) => d[yAttribute], 0.05);
   xScale.domain(xExtent).nice();
   yScale.domain(yExtent).nice();
 
-  // Group data by Session.
-  const sessionGroups = d3.group(rawData, (d) => d.Session);
+  // Group data by Session
+  const sessionGroups = d3.group(filteredData, (d) => d.Session);
   const binsCount = 100;
   aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
     return {
@@ -223,9 +233,12 @@ function updateChart() {
       aggregated: aggregateData(groupData, xAttribute, yAttribute, binsCount, xExtent[0], xExtent[1]),
     };
   }).filter((d) => d.aggregated.length > 0);
+
+  // Update axes
   xAxisGroup.transition().duration(500).call(d3.axisBottom(xScale));
   yAxisGroup.transition().duration(500).call(d3.axisLeft(yScale));
 
+  // Update session lines
   const sessionLines = svg.selectAll(".session-line").data(aggregatedBySession, (d) => d.session);
   sessionLines
     .enter()
@@ -240,12 +253,11 @@ function updateChart() {
     .attr("stroke-width", 1.5);
   sessionLines.exit().remove();
 
-  // For circles, create a group per session.
+  // Update circles
   const sessionGroupsSel = svg.selectAll(".session-group").data(aggregatedBySession, (d) => d.session);
   const sessionGroupsEnter = sessionGroupsSel.enter().append("g").attr("class", "session-group");
   sessionGroupsEnter.merge(sessionGroupsSel).each(function (d) {
     const group = d3.select(this);
-    // Bind aggregated points to circles.
     const circles = group.selectAll("circle").data(d.aggregated);
     circles
       .enter()
@@ -262,22 +274,21 @@ function updateChart() {
   });
   sessionGroupsSel.exit().remove();
 
-  // Attach tooltips to all circles.
+  // Update tooltips
   svg
     .selectAll("circle")
     .on("mouseover", (event, d) => {
       tooltip.transition().duration(200).style("opacity", 0.9);
-      // Retrieve the session from the parent group.
       const session = d3.select(event.target.parentNode).datum().session;
       const studentList = d.students.join(", ");
       tooltip
         .html(
           `
-            <strong>Session:</strong> ${session}<br/>
-            <strong>${xAttribute} bin center:</strong> ${d.x.toFixed(2)}<br/>
-            <strong>Avg. ${yAttribute}:</strong> ${d.y.toFixed(2)}<br/>
-            <strong>Students:</strong> ${studentList || "N/A"}
-        `
+              <strong>Session:</strong> ${session}<br/>
+              <strong>${xAttribute} bin center:</strong> ${d.x.toFixed(2)}<br/>
+              <strong>Avg. ${yAttribute}:</strong> ${d.y.toFixed(2)}<br/>
+              <strong>Students:</strong> ${studentList || "N/A"}
+          `
         )
         .style("left", event.pageX + 10 + "px")
         .style("top", event.pageY - 28 + "px");
@@ -286,7 +297,7 @@ function updateChart() {
       tooltip.transition().duration(300).style("opacity", 0);
     });
 
-  // Update axis labels.
+  // Update axis labels
   svg.selectAll(".axis-label").remove();
   svg
     .append("text")
@@ -303,32 +314,157 @@ function updateChart() {
     .attr("x", -margin.top)
     .attr("text-anchor", "end")
     .text(yAttribute.replace("_", " ").toUpperCase());
-  // Add legend for sessions (place this at the end of updateChart())
-  const legend = svg.selectAll(".legend").data(aggregatedBySession, (d) => d.session);
 
+  // Update legend
+  const legend = svg.selectAll(".legend").data(aggregatedBySession, (d) => d.session);
   const legendEnter = legend
     .enter()
     .append("g")
     .attr("class", "legend")
     .attr("transform", (d, i) => `translate(${width - 150}, ${i * 20})`);
-
   legendEnter
     .append("rect")
     .attr("width", 12)
     .attr("height", 12)
     .attr("fill", (d) => colorScale(d.session));
-
   legendEnter
     .append("text")
     .attr("x", 16)
     .attr("y", 10)
     .text((d) => d.session)
     .style("font-size", "12px");
-
   legend.merge(legendEnter).attr("transform", (d, i) => `translate(${width + 20}, ${i * 20})`);
-
   legend.exit().remove();
 }
+
+// function updateChart() {
+//   const xAttribute = d3.select("#xSelect").property("value");
+//   const yAttribute = d3.select("#ySelect").property("value");
+
+//   // Sort rawData by the selected x-attribute.
+//   rawData.sort((a, b) => a[xAttribute] - b[xAttribute]);
+
+//   // Overall trimmed domain across all sessions.
+//   const xExtent = getTrimmedExtent(rawData, (d) => d[xAttribute], 0.05);
+//   const yExtent = getTrimmedExtent(rawData, (d) => d[yAttribute], 0.05);
+//   xScale.domain(xExtent).nice();
+//   yScale.domain(yExtent).nice();
+
+//   // Group data by Session.
+//   const sessionGroups = d3.group(rawData, (d) => d.Session);
+//   const binsCount = 100;
+//   aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
+//     return {
+//       session: sessionName,
+//       aggregated: aggregateData(groupData, xAttribute, yAttribute, binsCount, xExtent[0], xExtent[1]),
+//     };
+//   }).filter((d) => d.aggregated.length > 0);
+//   xAxisGroup.transition().duration(500).call(d3.axisBottom(xScale));
+//   yAxisGroup.transition().duration(500).call(d3.axisLeft(yScale));
+
+//   const sessionLines = svg.selectAll(".session-line").data(aggregatedBySession, (d) => d.session);
+//   sessionLines
+//     .enter()
+//     .append("path")
+//     .attr("class", "session-line")
+//     .merge(sessionLines)
+//     .transition()
+//     .duration(500)
+//     .attr("d", (d) => lineGenerator(d.aggregated))
+//     .attr("stroke", (d) => colorScale(d.session))
+//     .attr("fill", "none")
+//     .attr("stroke-width", 1.5);
+//   sessionLines.exit().remove();
+
+//   // For circles, create a group per session.
+//   const sessionGroupsSel = svg.selectAll(".session-group").data(aggregatedBySession, (d) => d.session);
+//   const sessionGroupsEnter = sessionGroupsSel.enter().append("g").attr("class", "session-group");
+//   sessionGroupsEnter.merge(sessionGroupsSel).each(function (d) {
+//     const group = d3.select(this);
+//     // Bind aggregated points to circles.
+//     const circles = group.selectAll("circle").data(d.aggregated);
+//     circles
+//       .enter()
+//       .append("circle")
+//       .attr("r", 3)
+//       .attr("fill", colorScale(d.session))
+//       .attr("fill-opacity", 0.7)
+//       .merge(circles)
+//       .transition()
+//       .duration(500)
+//       .attr("cx", (dPoint) => xScale(dPoint.x))
+//       .attr("cy", (dPoint) => yScale(dPoint.y));
+//     circles.exit().remove();
+//   });
+//   sessionGroupsSel.exit().remove();
+
+//   // Attach tooltips to all circles.
+//   svg
+//     .selectAll("circle")
+//     .on("mouseover", (event, d) => {
+//       tooltip.transition().duration(200).style("opacity", 0.9);
+//       // Retrieve the session from the parent group.
+//       const session = d3.select(event.target.parentNode).datum().session;
+//       const studentList = d.students.join(", ");
+//       tooltip
+//         .html(
+//           `
+//             <strong>Session:</strong> ${session}<br/>
+//             <strong>${xAttribute} bin center:</strong> ${d.x.toFixed(2)}<br/>
+//             <strong>Avg. ${yAttribute}:</strong> ${d.y.toFixed(2)}<br/>
+//             <strong>Students:</strong> ${studentList || "N/A"}
+//         `
+//         )
+//         .style("left", event.pageX + 10 + "px")
+//         .style("top", event.pageY - 28 + "px");
+//     })
+//     .on("mouseout", () => {
+//       tooltip.transition().duration(300).style("opacity", 0);
+//     });
+
+//   // Update axis labels.
+//   svg.selectAll(".axis-label").remove();
+//   svg
+//     .append("text")
+//     .attr("class", "axis-label")
+//     .attr("x", width)
+//     .attr("y", height + margin.bottom - 10)
+//     .attr("text-anchor", "end")
+//     .text(xAttribute.replace("_", " ").toUpperCase());
+//   svg
+//     .append("text")
+//     .attr("class", "axis-label")
+//     .attr("transform", "rotate(-90)")
+//     .attr("y", -margin.left + 15)
+//     .attr("x", -margin.top)
+//     .attr("text-anchor", "end")
+//     .text(yAttribute.replace("_", " ").toUpperCase());
+//   // Add legend for sessions (place this at the end of updateChart())
+//   const legend = svg.selectAll(".legend").data(aggregatedBySession, (d) => d.session);
+
+//   const legendEnter = legend
+//     .enter()
+//     .append("g")
+//     .attr("class", "legend")
+//     .attr("transform", (d, i) => `translate(${width - 150}, ${i * 20})`);
+
+//   legendEnter
+//     .append("rect")
+//     .attr("width", 12)
+//     .attr("height", 12)
+//     .attr("fill", (d) => colorScale(d.session));
+
+//   legendEnter
+//     .append("text")
+//     .attr("x", 16)
+//     .attr("y", 10)
+//     .text((d) => d.session)
+//     .style("font-size", "12px");
+
+//   legend.merge(legendEnter).attr("transform", (d, i) => `translate(${width + 20}, ${i * 20})`);
+
+//   legend.exit().remove();
+// }
 
 // Update when dropdowns change.
 d3.select("#xSelect").on("change", updateChart);
@@ -339,3 +475,5 @@ d3.select("#resetBrush").on("mousedown", function (event) {
   updateChart(); // Restore full dataset
   d3.select("#summary").html(""); // Clear the summary
 });
+
+d3.select("#updateEvent").on("click", updateChart);
