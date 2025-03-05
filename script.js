@@ -1,5 +1,6 @@
 let aggregatedBySession = [];
-
+// Global object to store pre-binned data for different bin sizes
+const preBinnedData = {};
 const units = {
   time_index: "seconds",
   heart_rate: "BPM",
@@ -15,7 +16,58 @@ function getTrimmedExtent(data, accessor, trim = 0.05) {
   return [lower, upper];
 }
 
-// Aggregate data into bins along x, computing average y and collecting Students.
+// // Function to aggregate data using pre-binned data
+// function aggregateData(data, xKey, yKey, bins, xMin, xMax) {
+//   // Check if pre-binned data exists for the selected bin size
+//   const binSize = bins || 100; // Default to 100 if not provided
+//   const preBinned = preBinnedData[binSize];
+
+//   if (!preBinned) {
+//     // If pre-binned data doesn't exist, fall back to the original aggregation process
+//     const binWidth = (xMax - xMin) / bins;
+//     const binArray = [];
+//     for (let i = 0; i < bins; i++) {
+//       binArray.push({
+//         xStart: xMin + i * binWidth,
+//         dataPoints: [],
+//       });
+//     }
+
+//     // Aggregate the raw data into bins
+//     data.forEach((d) => {
+//       const xVal = d[xKey];
+//       if (xVal >= xMin && xVal <= xMax) {
+//         const binIndex = Math.floor((xVal - xMin) / binWidth);
+//         if (binIndex >= 0 && binIndex < bins) {
+//           binArray[binIndex].dataPoints.push(d);
+//         }
+//       }
+//     });
+
+//     // Aggregating data points for each bin
+//     return binArray
+//       .map((b) => {
+//         if (b.dataPoints.length === 0) return null;
+//         return {
+//           x: b.xStart + binWidth / 2, // bin midpoint
+//           y: d3.mean(b.dataPoints, (d) => d[yKey]),
+//           students: Array.from(new Set(b.dataPoints.map((d) => d.Student))),
+//         };
+//       })
+//       .filter((d) => d !== null && !isNaN(d.y));
+//   } else {
+//     // If pre-binned data is available, use it directly
+//     return preBinned.map((binned) => {
+//       return {
+//         x: binned.time_index,
+//         y: binned[yKey],
+//         students: Array.from(new Set(data.map((d) => d.Student))),
+//       };
+//     });
+//   }
+// }
+
+Aggregate data into bins along x, computing average y and collecting Students.
 function aggregateData(data, xKey, yKey, bins, xMin, xMax) {
   const binWidth = (xMax - xMin) / bins;
   const binArray = [];
@@ -217,7 +269,6 @@ function updateChart() {
 
   // Filter rawData based on selected event
   let filteredData = rawData;
-  console.log(filteredData);
   if (selectedEvent !== "all") {
     filteredData = rawData.filter((d) => d.Session === selectedEvent);
   }
@@ -233,7 +284,8 @@ function updateChart() {
 
   // Group data by Session
   const sessionGroups = d3.group(filteredData, (d) => d.Session);
-  const binsCount = 100;
+  // const binsCount = 100;
+  const binsCount = d3.select("#binSize").property("value");
   aggregatedBySession = Array.from(sessionGroups, ([sessionName, groupData]) => {
     return {
       session: sessionName,
@@ -354,3 +406,40 @@ d3.select("#resetBrush").on("mousedown", function (event) {
 });
 
 d3.select("#updateEvent").on("click", updateChart);
+d3.select("#binSize").on("input", updateChart);
+
+function updateBinSize(value) {
+  document.getElementById("binSizeValue").innerText = value;
+}
+
+// Function to compute the pre-binned data
+function computePreBinnedData() {
+  const binSizes = [25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750];
+
+  binSizes.forEach((binSize) => {
+    preBinnedData[binSize] = binData(rawData, binSize);
+  });
+}
+
+// Function to bin the data based on the selected bin size
+function binData(data, binSize) {
+  const binnedData = [];
+
+  // Assuming `time_index` is the x-axis for binning.
+  // Group data by the time index and bin it based on the provided bin size.
+  for (let i = 0; i < data.length; i += binSize) {
+    const bin = data.slice(i, i + binSize);
+
+    // Compute the average values for each metric in the bin
+    const avg = {
+      time_index: bin[0].time_index, // You could also average time_index if necessary
+      eda: d3.mean(bin, (d) => d.eda),
+      heart_rate: d3.mean(bin, (d) => d.heart_rate),
+      skin_temp: d3.mean(bin, (d) => d.skin_temp),
+    };
+
+    binnedData.push(avg);
+  }
+
+  return binnedData;
+}
