@@ -67,7 +67,7 @@ function getTrimmedExtent(data, accessor, trim = 0.05) {
 //   }
 // }
 
-Aggregate data into bins along x, computing average y and collecting Students.
+// Aggregate data into bins along x, computing average y and collecting Students.
 function aggregateData(data, xKey, yKey, bins, xMin, xMax) {
   const binWidth = (xMax - xMin) / bins;
   const binArray = [];
