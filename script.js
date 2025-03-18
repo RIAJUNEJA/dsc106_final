@@ -256,6 +256,7 @@ d3.csv("consolidated_stress_data.csv")
       d.skin_temp = +d["Temperature"];
     });
     rawData = data;
+    computePreBinnedData();
     updateChart();
   })
   .catch((err) => console.error("Error loading CSV:", err));
@@ -292,6 +293,7 @@ function updateChart() {
       aggregated: aggregateData(groupData, xAttribute, yAttribute, binsCount, xExtent[0], xExtent[1]),
     };
   }).filter((d) => d.aggregated.length > 0);
+  console.log(aggregatedBySession);
 
   // Update axes
   xAxisGroup.transition().duration(500).call(d3.axisBottom(xScale));
